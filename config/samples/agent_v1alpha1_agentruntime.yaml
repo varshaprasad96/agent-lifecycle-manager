@@ -1,0 +1,30 @@
+apiVersion: agent.kagenti.dev/v1alpha1
+kind: AgentRuntime
+metadata:
+  labels:
+    app.kubernetes.io/name: agent-lifecycle-manager
+    app.kubernetes.io/managed-by: kustomize
+  name: weather-agent
+spec:
+  type: agent
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: weather-agent
+  identity:
+    spiffe:
+      trustDomain: example.org
+  trace:
+    endpoint: otel-collector.kagenti-system:4317
+    protocol: grpc
+  policy:
+    allowedIngressNamespaces:
+      - default
+      - kagenti-system
+    dependencies:
+      - name: weather-tool
+      - name: data-agent
+        namespace: team2
+    externalEgress:
+      - host: api.openweathermap.org
+        port: 443
