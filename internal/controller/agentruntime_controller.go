@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	agentv1alpha1 "github.com/varshaprasad96/agent-lifecycle-manager/api/v1alpha1"
 )
@@ -55,6 +57,8 @@ type AgentRuntimeReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
 // +kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 
 func (r *AgentRuntimeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -97,6 +101,28 @@ func (r *AgentRuntimeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		r.setCondition(ar, conditionTypeReady, metav1.ConditionFalse, "MutationFailed", err.Error())
 		_ = r.Status().Update(ctx, ar)
 		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileHTTPRoute(ctx, ar); err != nil {
+		log.Error(err, "failed to reconcile HTTPRoute")
+		r.setCondition(ar, conditionTypeGatewayConfigured, metav1.ConditionFalse, "HTTPRouteError", err.Error())
+		ar.Status.Phase = "Error"
+		_ = r.Status().Update(ctx, ar)
+		return ctrl.Result{}, err
+	}
+	r.setCondition(ar, conditionTypeGatewayConfigured, metav1.ConditionTrue, "HTTPRouteReady",
+		fmt.Sprintf("HTTPRoute %s created", httpRouteName(ar)))
+
+	if err := r.reconcileNetworkPolicy(ctx, ar); err != nil {
+		log.Error(err, "failed to reconcile NetworkPolicy")
+		r.setCondition(ar, conditionTypePolicyApplied, metav1.ConditionFalse, "NetworkPolicyError", err.Error())
+		ar.Status.Phase = "Error"
+		_ = r.Status().Update(ctx, ar)
+		return ctrl.Result{}, err
+	}
+	if ar.Spec.Policy != nil {
+		r.setCondition(ar, conditionTypePolicyApplied, metav1.ConditionTrue, "NetworkPolicyCreated",
+			fmt.Sprintf("NetworkPolicy %s created", networkPolicyName(ar)))
 	}
 
 	r.updateStatus(ctx, ar, workload)
@@ -174,6 +200,15 @@ func (r *AgentRuntimeReconciler) updateStatus(ctx context.Context, ar *agentv1al
 		}
 	}
 
+	gw := &agentv1alpha1.GatewayStatus{
+		HTTPRouteName:   httpRouteName(ar),
+		GatewayEndpoint: gatewayEndpoint(ar),
+	}
+	if ar.Spec.Policy != nil {
+		gw.NetworkPolicyName = networkPolicyName(ar)
+	}
+	ar.Status.Gateway = gw
+
 	r.setCondition(ar, conditionTypeReady, metav1.ConditionTrue, "WorkloadConfigured", "Agent workload configured successfully")
 }
 
@@ -208,6 +243,8 @@ func (r *AgentRuntimeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&agentv1alpha1.AgentRuntime{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&gatewayv1.HTTPRoute{}).
+		Owns(&networkingv1.NetworkPolicy{}).
 		Named("agentruntime").
 		Complete(r)
 }
