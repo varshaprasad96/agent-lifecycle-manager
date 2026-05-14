@@ -5,6 +5,14 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - agent.kagenti.dev
   resources:
   - agentruntimes
@@ -52,6 +60,18 @@ rules:
   - gateway.networking.k8s.io
   resources:
   - httproutes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kuadrant.io
+  resources:
+  - authpolicies
   verbs:
   - create
   - delete

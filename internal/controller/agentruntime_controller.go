@@ -59,6 +59,8 @@ type AgentRuntimeReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=kuadrant.io,resources=authpolicies,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 
 func (r *AgentRuntimeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -123,6 +125,14 @@ func (r *AgentRuntimeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if ar.Spec.Policy != nil {
 		r.setCondition(ar, conditionTypePolicyApplied, metav1.ConditionTrue, "NetworkPolicyCreated",
 			fmt.Sprintf("NetworkPolicy %s created", networkPolicyName(ar)))
+	}
+
+	if err := r.reconcileAuthPolicy(ctx, ar); err != nil {
+		log.Error(err, "failed to reconcile AuthPolicy")
+		r.setCondition(ar, conditionTypeAuthConfigured, metav1.ConditionFalse, "AuthPolicyError", err.Error())
+		ar.Status.Phase = "Error"
+		_ = r.Status().Update(ctx, ar)
+		return ctrl.Result{}, err
 	}
 
 	r.updateStatus(ctx, ar, workload)
@@ -202,6 +212,7 @@ func (r *AgentRuntimeReconciler) updateStatus(ctx context.Context, ar *agentv1al
 
 	gw := &agentv1alpha1.GatewayStatus{
 		HTTPRouteName:   httpRouteName(ar),
+		AuthPolicyName:  authPolicyName(ar),
 		GatewayEndpoint: gatewayEndpoint(ar),
 	}
 	if ar.Spec.Policy != nil {
