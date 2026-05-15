@@ -135,6 +135,16 @@ func (r *AgentRuntimeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
+	if err := r.reconcileBackendTLSPolicy(ctx, ar); err != nil {
+		log.Error(err, "failed to reconcile BackendTLSPolicy")
+		r.setCondition(ar, conditionTypeIdentityVerified, metav1.ConditionFalse, "BackendTLSError", err.Error())
+		ar.Status.Phase = "Error"
+		_ = r.Status().Update(ctx, ar)
+		return ctrl.Result{}, err
+	}
+
+	r.fetchAgentCard(ctx, ar)
+
 	r.updateStatus(ctx, ar, workload)
 
 	if err := r.Status().Update(ctx, ar); err != nil {

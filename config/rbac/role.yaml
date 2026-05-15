@@ -59,6 +59,7 @@ rules:
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
+  - backendtlspolicies
   - httproutes
   verbs:
   - create
