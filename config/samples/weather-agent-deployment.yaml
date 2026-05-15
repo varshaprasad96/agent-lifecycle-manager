@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weather-agent
+  namespace: agent-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weather-agent
+  template:
+    metadata:
+      labels:
+        app: weather-agent
+    spec:
+      containers:
+        - name: agent
+          image: python:3.12-slim
+          command:
+            - python
+            - -c
+            - |
+              import http.server, json, socketserver
+
+              class Handler(http.server.BaseHTTPRequestHandler):
+                  def do_GET(self):
+                      if self.path == '/.well-known/agent-card.json':
+                          card = {
+                              "name": "weather-agent",
+                              "description": "Provides weather forecasts",
+                              "version": "1.0",
+                              "skills": [
+                                  {"id": "weather-forecast", "name": "weather-forecast"},
+                                  {"id": "temperature-lookup", "name": "temperature-lookup"}
+                              ],
+                              "capabilities": {"streaming": True, "pushNotifications": False}
+                          }
+                          self.send_response(200)
+                          self.send_header('Content-Type', 'application/json')
+                          self.end_headers()
+                          self.wfile.write(json.dumps(card).encode())
+                      else:
+                          self.send_response(404)
+                          self.end_headers()
+
+                  def do_POST(self):
+                      content_length = int(self.headers.get('Content-Length', 0))
+                      body = self.rfile.read(content_length) if content_length else b''
+                      request = json.loads(body) if body else {}
+
+                      response = {
+                          "jsonrpc": "2.0",
+                          "id": request.get("id"),
+                          "result": {
+                              "role": "agent",
+                              "parts": [{"text": "The weather in NYC is 72F and sunny."}]
+                          }
+                      }
+                      self.send_response(200)
+                      self.send_header('Content-Type', 'application/json')
+                      self.end_headers()
+                      self.wfile.write(json.dumps(response).encode())
+
+                  def log_message(self, format, *args):
+                      pass
+
+              with socketserver.TCPServer(("", 8000), Handler) as httpd:
+                  print("weather-agent serving on :8000")
+                  httpd.serve_forever()
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weather-agent
+  namespace: agent-system
+spec:
+  selector:
+    app: weather-agent
+  ports:
+    - port: 8000
+      targetPort: 8000

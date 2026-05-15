@@ -1,0 +1,13 @@
+apiVersion: v2
+name: agent-lifecycle-manager
+description: Gateway-based Kubernetes operator for AI agent lifecycle management
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - kubernetes
+  - operator
+  - ai-agents
+  - gateway
+  - a2a
+  - mcp

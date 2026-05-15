@@ -1,0 +1,25 @@
+apiVersion: agent.kagenti.dev/v1alpha1
+kind: AgentRuntime
+metadata:
+  name: weather-agent
+  namespace: agent-system
+spec:
+  type: agent
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: weather-agent
+  identity:
+    spiffe:
+      trustDomain: example.org
+  trace:
+    endpoint: otel-collector.agent-system:4317
+    protocol: grpc
+  policy:
+    allowedIngressNamespaces:
+      - agent-system
+    dependencies:
+      - name: weather-tool
+    externalEgress:
+      - host: api.openweathermap.org
+        port: 443

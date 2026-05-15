@@ -1,0 +1,48 @@
+manager:
+  image:
+    repository: ghcr.io/varshaprasad96/agent-lifecycle-manager
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+router:
+  enabled: true
+  image:
+    repository: ghcr.io/varshaprasad96/agent-router
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+gateway:
+  enabled: true
+  name: agent-gateway
+  className: eg
+  listeners:
+    - name: agent-http
+      port: 8080
+      protocol: HTTP
+
+gatewayConfig:
+  issuerUrl: ""
+  tokenExchangeUrl: ""
+  trustDomain: "example.org"
+
+spireTrustBundle:
+  enabled: false
+  data: ""
+
+namespace: agent-system
